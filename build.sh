@@ -1,3 +1,5 @@
 #!/bin/sh
 set -eu
-exec python3 "$(dirname "$0")/build.py"
+root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+"$root/install-dependencies.sh"
+exec python3 "$root/build.py"

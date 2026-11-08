@@ -14,7 +14,10 @@ OpenWrt package directories (with their own native Makefiles) go under
 `config/sdk-packages`; the matching SDK compiles these before image assembly.
 These directories are private build inputs and are not committed by this template.
 
-Run `./build.sh` as an ordinary Linux user. Dependencies: Python 3.12+, make,
+Run `./build.sh`. The platform's privileged builder uses the idempotent
+`install-dependencies.sh` to provision missing standard prerequisites on Fedora
+or Debian. An ordinary user receives a precise prerequisite error and can run
+that installer separately as root. Dependencies: Python 3.12+, make,
 gcc, g++, binutils, gawk, git, rsync, unzip, zstd, GnuPG/gpgv and the normal
 OpenWrt ImageBuilder prerequisites. `OPENWRT_CACHE_DIR` may point to a private
 archive cache. Downloads are hash checked and archive extraction uses the
