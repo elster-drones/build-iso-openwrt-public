@@ -88,6 +88,9 @@ def authenticated_sources(config, cache):
         raise ValueError('Requested profile is not in the signed release')
     if profiles['arch_packages'] != config['arch_packages']:
         raise ValueError('Requested architecture conflicts with the signed profile')
+    feeds = download(base + 'feeds.buildinfo', cache / 'feeds.buildinfo',
+        sha256=verified['feeds.buildinfo'], max_bytes=1024**2)
+    config['_signed_feeds'] = str(feeds)
     return profiles
 
 
@@ -194,6 +197,7 @@ def package(root, config, profile, source, *, imagebuilder_sha256):
         'source_url': 'https://git.openwrt.org/openwrt/openwrt.git',
         'source_revision': definitions['version_code'],
         'source_archive_url': 'https://github.com/openwrt/openwrt/archive/refs/tags/v' + VERSION + '.tar.gz',
+        'sdk': config.get('_sdk'), 'sdk_feed_revisions': config.get('_sdk_feed_revisions', {}),
         'builder_revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip(),
         'files': {name: digest(path) for name, path in sorted(files.items())}}
     temporary = output / 'openwrt-firmware.zip.tmp'
@@ -222,8 +226,26 @@ def main():
             sdk_source = sources['sdk']
             sdk_archive = download(sdk_source['url'], cache / sdk_source['filename'], sha256=sdk_source['sha256'])
             sdk = extract(sdk_archive, Path(work) / 'sdk')
+            feeds = Path(config['_signed_feeds']).read_text()
+            pinned_feeds = {}
+            for line in feeds.splitlines():
+                if not line.strip() or line.lstrip().startswith('#'):
+                    continue
+                fields = line.split()
+                if (len(fields) != 3 or fields[0] not in {'src-git', 'src-git-full'}
+                        or not re.fullmatch(r'[A-Za-z0-9_-]+', fields[1])
+                        or not re.search(r'\^[0-9a-f]{40}$', fields[2])):
+                    raise ValueError('Release SDK feeds must name exact source revisions')
+                url, revision = fields[2].rsplit('^', 1)
+                pinned_feeds[fields[1]] = {'url': url, 'revision': revision}
+            (sdk / 'feeds.conf.default').write_text(feeds)
             run('./scripts/feeds', 'update', '-a', cwd=sdk)
             run('./scripts/feeds', 'install', '-a', cwd=sdk)
+            for name, feed in pinned_feeds.items():
+                actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=sdk / 'feeds' / name).decode().strip()
+                if actual != feed['revision']:
+                    raise ValueError('SDK feed differs from signed release revision')
+            config['_sdk'], config['_sdk_feed_revisions'] = sdk_source, pinned_feeds
             packages = []
             for path in sorted(custom.iterdir()):
                 if not path.is_dir() or not re.fullmatch('[A-Za-z0-9][A-Za-z0-9_-]*', path.name):
