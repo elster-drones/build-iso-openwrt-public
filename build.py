@@ -91,13 +91,33 @@ def authenticated_sources(config, cache):
     return profiles
 
 
+def upstream_archive_filter(member, destination):
+    # Release archives retain generated aliases to their build host. Recreate
+    # only these aliases via OpenWrt's native prerequisite checks; never expose
+    # arbitrary absolute links from an archive to this builder host.
+    if member.issym() and member.linkname.startswith('/'):
+        path, target = PurePosixPath(member.name), PurePosixPath(member.linkname)
+        if str(path.parent).endswith('/staging_dir/host/bin'):
+            native = {'gcc': 'ccache_cc.sh', 'g++': 'ccache_cxx.sh',
+                'python': 'python3.9', 'python3': 'python3.9', 'xxd': 'xxdi.pl', 'ldconfig': 'noop.sh'}
+            system = {'bash', 'awk', 'egrep', 'file', 'grep', 'gzip', 'which', 'getopt',
+                'rsync', 'diff', 'wget', 'perl', 'git', 'unzip'}
+            if path.name == 'ldconfig' and target.name == native['ldconfig']:
+                return tarfile.data_filter(member.replace(linkname='../../../scripts/noop.sh'), destination)
+            if ((path.name in system and str(target.parent) in {'/bin', '/usr/bin'}
+                    and target.name == ('gawk' if path.name == 'awk' else path.name))
+                    or (path.name in native and target.name == native[path.name])):
+                return None
+    return tarfile.data_filter(member, destination)
+
+
 def extract(source, destination):
     destination.mkdir(parents=True)
     # tarfile's data filter checks archive paths, links and device members.
     with subprocess.Popen(['zstd', '-dc', str(source)], stdout=subprocess.PIPE) as proc:
         try:
             with tarfile.open(fileobj=proc.stdout, mode='r|') as archive:
-                archive.extractall(destination, filter='data')
+                archive.extractall(destination, filter=upstream_archive_filter)
         except BaseException:
             proc.terminate()
             raise
@@ -106,6 +126,7 @@ def extract(source, destination):
     dirs = list(destination.iterdir())
     if len(dirs) != 1 or not dirs[0].is_dir():
         raise ValueError('Unexpected upstream archive root')
+    (dirs[0] / 'staging_dir/host/.prereq-build').unlink(missing_ok=True)
     return dirs[0]
 
 

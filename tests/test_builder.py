@@ -65,3 +65,32 @@ class BuilderTests(unittest.TestCase):
                 self.assertFalse(manifest['runtime_tested'])
                 for name, sha256 in manifest['files'].items():
                     self.assertEqual(__import__('hashlib').sha256(archive.read(name)).hexdigest(), sha256)
+
+class ArchiveFilterTests(unittest.TestCase):
+    def member(self, name, target):
+        import tarfile
+        item = tarfile.TarInfo(name)
+        item.type = tarfile.SYMTYPE
+        item.linkname = target
+        return item
+
+    def test_regenerates_recognized_host_aliases_and_keeps_noop_internal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            member = self.member('sdk/staging_dir/host/bin/gcc', '/builder/sdk/ccache_cc.sh')
+            self.assertIsNone(builder.upstream_archive_filter(member, directory))
+            member = self.member('sdk/staging_dir/host/bin/ldconfig', '/builder/build/scripts/noop.sh')
+            result = builder.upstream_archive_filter(member, directory)
+            self.assertEqual(result.linkname, '../../../scripts/noop.sh')
+
+    def test_refuses_secret_link_outside_aliases_and_write_through_alias(self):
+        import tarfile
+        with tempfile.TemporaryDirectory() as directory:
+            for name, target in [('sdk/staging_dir/host/bin/grep', '/etc/passwd'),
+                                 ('sdk/anything', '/bin/grep'),
+                                 ('../escape', '/bin/grep')]:
+                with self.assertRaises(tarfile.FilterError):
+                    builder.upstream_archive_filter(self.member(name, target), directory)
+            root = Path(directory)
+            (root / 'sdk').symlink_to('/tmp')
+            with self.assertRaises(tarfile.FilterError):
+                builder.upstream_archive_filter(tarfile.TarInfo('sdk/host-write'), directory)
