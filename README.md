@@ -27,7 +27,7 @@ Bootloader-write artifacts are deliberately excluded. The build result proves
 assembly and integrity only: actual router boot, Wi-Fi, Ethernet and recovery
 must be tested separately on the exact hardware revision.
 
-The adapter is GPL-2.0-or-later. Included upstream software retains its own
+The adapter is MIT-licensed. Included upstream software retains its own
 licences; package lists and exact upstream source revision are retained with the
 bundle. Corresponding upstream sources are available from the OpenWrt source
 and release repositories referenced in the manifest.

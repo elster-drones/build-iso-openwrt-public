@@ -2,7 +2,6 @@
 """Wire a pinned upstream ImageBuilder/SDK to exact-profile firmware output."""
 from __future__ import annotations
 
-import concurrent.futures
 import hashlib
 import json
 import os
@@ -148,7 +147,7 @@ def package(root, config, profile, source, *, imagebuilder_sha256):
     # Retain reproducibility metadata and image-specific package manifest.
     for path in products.iterdir():
         if path.is_file() and (path.name.endswith('.buildinfo') or path.name == 'profiles.json'
-                or path.name.endswith('-' + config['profile'].replace('_', '-') + '.manifest')):
+                or path.name.endswith('.manifest')):
             files['metadata/' + path.name] = path
     notes = output / 'INSTALL.txt'
     notes.write_text('OpenWrt ' + VERSION + '\nExact target: ' + config['target'] + ':' + config['profile']
@@ -159,6 +158,12 @@ def package(root, config, profile, source, *, imagebuilder_sha256):
         'Compilation and checksum validation do not establish boot, Ethernet or Wi-Fi operation on hardware.\n')
     files['INSTALL.txt'] = notes
     files['LICENSE'] = ROOT / 'LICENSE'
+    for directory in ['config/sdk-packages', 'config/files']:
+        inputs = ROOT / directory
+        if inputs.is_dir():
+            for path in inputs.rglob('*'):
+                if path.is_file() and not path.is_symlink():
+                    files['sources/' + str(path.relative_to(ROOT))] = path
     manifest = {'schema_version': 1, 'distribution': 'openwrt', 'version': VERSION,
         'target': config['target'], 'profile': config['profile'],
         'board': config['target'] + ':' + config['profile'], 'architecture': config['architecture'],
