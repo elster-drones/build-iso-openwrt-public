@@ -1,0 +1,7 @@
+.cache/
+.openwrt-*/
+output/
+__pycache__/
+config/openwrt.json
+config/files/
+config/sdk-packages/

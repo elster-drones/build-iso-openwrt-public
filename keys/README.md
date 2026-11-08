@@ -1,0 +1,2 @@
+OpenWrt release signing public key, retained from https://raw.githubusercontent.com/openwrt/keyring/fbae29d730f81c892f52e0ff00fe867444aeeae6/gpg/0x1D53D1877742E911.asc
+SHA-256: 334d8760642bf986e87ffa4eef3860df11941c38241956a9ebc6d90f8ab6f9a3
